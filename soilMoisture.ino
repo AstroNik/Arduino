@@ -1,5 +1,5 @@
-const int AirValue = 620;
-const int WaterValue = 310;
+const int AirValue = 854;
+const int WaterValue = 458;
 int soilMoistureValue = 0;
 int soilMoisturePercent = 0;
 
