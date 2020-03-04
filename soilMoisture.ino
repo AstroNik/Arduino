@@ -1,5 +1,5 @@
-const int AirValue = 854;
-const int WaterValue = 458;
+const int AirValue = 854; //Analog Value when not in water
+const int WaterValue = 458; //Analog Value when fully submerged
 int soilMoistureValue = 0;
 int soilMoisturePercent = 0;
 
