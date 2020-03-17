@@ -4,8 +4,8 @@
 
 #define SERVER_IP "52.152.247.223"
 
-char* ssid = "Oceans11";
-char* password = "Why1sy0urname";
+char* ssid = "";
+char* password = "";
 
 const int AirValue = 850; //Analog Value when not in water
 const int WaterValue = 458; //Analog Value when fully submerged
