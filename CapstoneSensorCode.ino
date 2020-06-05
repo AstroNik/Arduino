@@ -4,12 +4,6 @@
 #include <ArduinoJson.h>
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
 
-// WLAN
-#define mySSID "Rogers 456"
-#define myPASSWORD "A6472140090"
-
-const char*  ssid = mySSID;
-const char* password = myPASSWORD;
 
 const char* host = "ecoders.ca";
 String url = "/dataProcess";
