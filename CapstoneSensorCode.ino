@@ -1,11 +1,19 @@
-#include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
+#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
-
-//needed for library
-#include <DNSServer.h>
-#include <ESP8266WebServer.h>
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
+
+// WLAN
+#define mySSID "Rogers 456"
+#define myPASSWORD "A6472140090"
+
+const char*  ssid = mySSID;
+const char* password = myPASSWORD;
+
+const char* host = "ecoders.ca";
+String url = "/dataProcess";
+const char* fingerprint = "33337bd569ceb38f5d79a02919910233f93aea53"; 
 
 
 //Sensor Data Variables
@@ -13,20 +21,77 @@ const int AirValue = 856; //Analog Value when not in water
 const int WaterValue = 458; //Analog Value when fully submerged
 int SoilMoistureAmount = 0;
 int SoilMoisturePercent = 0;
-
-String serverHost = "https://ecoders.ca";
-String data;
-HTTPClient http;
 StaticJsonDocument<200> doc;
+String data;
 int httpCode;
 String requestBody;
+char jsonChar[100];
 
+
+const int httpsPort = 443;
 
 void setup() {
-    Serial.begin(115200);
-    //DeviceID();
-    
-    //WiFiManager
+  Serial.begin(115200);
+
+  //connect to the wifi
+  connectToWifi();
+
+  createTLSConnection();
+  
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  
+}
+
+void createTLSConnection() {
+  // Use WiFiClientSecure class to create TLS connection
+  WiFiClientSecure client;
+  client.setInsecure();
+  Serial.print("connecting to ");
+  Serial.println(host);
+  if (!client.connect(host, httpsPort)) {
+    Serial.println("connection failed");
+    return;
+  }
+  
+  if (client.verify(fingerprint, host)) {
+    Serial.println("fingerprint matches");
+    readSensorData();
+    JSONDocument();
+  } else {
+    Serial.println("fingerprint doesn't match");
+  }
+
+  Serial.println("\nStarting connection to server...");
+  if (!client.connect(host, 443))
+    Serial.println("Connection failed!");
+  else {
+    Serial.println("Connected to server!");
+    //this is where the issue is when i try to send the json document to the server, then it gives me an error 
+
+  }
+  while (client.connected()) {
+    String line = client.readStringUntil('\n');
+    Serial.println(line);
+    Serial.println();
+    if (line == "\r") {
+      Serial.println("headers received");
+      break;
+    }
+  }
+  String line = client.readStringUntil('\n');
+  Serial.println("reply was:");
+  Serial.println("==========");
+  Serial.println(line);
+  Serial.println("==========");
+  Serial.println("closing connection");
+}
+
+void connectToWifi() {
+  //WiFiManager
     //Local intialization. Once its business is done, there is no need to keep it around
     WiFiManager wifiManager;
     //reset saved settings
@@ -44,23 +109,6 @@ void setup() {
     Serial.println("connected...yeey :)");
 }
 
-void loop() {
-    if (WiFi.status() == WL_CONNECTED) {
-    
-      readSensorData();
-    
-      JSONDocument();
-
-      sendPOSTRequest();
-  }
-}
-
-/*
-void DeviceID() {
-  deviceID = random(000000001,999999999);
-  Serial.println(deviceID);
-}*/
-
 void JSONDocument() {
   JsonObject root = doc.to<JsonObject>();
 
@@ -72,19 +120,11 @@ void JSONDocument() {
 
   serializeJsonPretty(doc, requestBody);
   serializeJsonPretty(doc, Serial);
-}
 
-void sendPOSTRequest() {
-  http.begin(serverHost);
-  http.addHeader("Content-Type", "Sensor Data");
-  httpCode = http.POST(requestBody);
-  if (httpCode > 0) {
-    Serial.println("\nSuccessful HTTP Post Request");
-  }
-  else {
-    Serial.println("\nError on HTTP POST Request");
-  }
-  http.end();
+  serializeJsonPretty(doc, jsonChar);
+  //Serial.println("This is JSON DOcument");
+  //Serial.println(jsonChar);
+  //root.printTo((char*)jsonChar, root.size() + 1);
 }
 
 void readSensorData() {
