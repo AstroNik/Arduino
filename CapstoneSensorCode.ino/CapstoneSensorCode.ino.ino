@@ -8,7 +8,7 @@
 const char* host = "ecoders.ca";
 String url = "/dataProcess";
 const char* fingerprint = "33337bd569ceb38f5d79a02919910233f93aea53"; 
-
+const int httpsPort = 443;
 
 //Sensor Data Variables
 const int AirValue = 856; //Analog Value when not in water
@@ -16,13 +16,13 @@ const int WaterValue = 458; //Analog Value when fully submerged
 int SoilMoistureAmount = 0;
 int SoilMoisturePercent = 0;
 StaticJsonDocument<200> doc;
-String data;
+//String data;
 int httpCode;
 String requestBody;
 char jsonChar[100];
 
+String deviceID = "";
 
-const int httpsPort = 443;
 
 void setup() {
   Serial.begin(115200);
@@ -34,10 +34,13 @@ void setup() {
   
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+
+  getDeviceID();
 }
 
 void loop() {
-  
+  Serial.println("ESP8266 will now enter deep sleep mode");
+  deepSleep();
 }
 
 void createTLSConnection() {
@@ -64,7 +67,7 @@ void createTLSConnection() {
     Serial.println("Connection failed!");
   else {
     Serial.println("Connected to server!");
-    //this is where the issue is when i try to send the json document to the server, then it gives me an error 
+    //this is where the issue is when i try to send the json document to the server, then it gives me an error
 
   }
   while (client.connected()) {
@@ -82,6 +85,16 @@ void createTLSConnection() {
   Serial.println(line);
   Serial.println("==========");
   Serial.println("closing connection");
+}
+
+void getDeviceID() {
+  deviceID = WiFi.macAddress();
+  Serial.println(deviceID);  
+}
+
+void deepSleep() {
+  Serial.println("Right before you sleep");
+  ESP.deepSleep(900e6);   //ESP goes into deep sleep for 15 minutes
 }
 
 void connectToWifi() {
