@@ -29,18 +29,17 @@ void setup() {
 
   //connect to the wifi
   connectToWifi();
-
-  createTLSConnection();
+  getDeviceID();
+  
   
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
-  getDeviceID();
+  
 }
 
 void loop() {
-  Serial.println("ESP8266 will now enter deep sleep mode");
-  deepSleep();
+  createTLSConnection();
 }
 
 void createTLSConnection() {
@@ -68,7 +67,7 @@ void createTLSConnection() {
   else {
     Serial.println("Connected to server!");
     //this is where the issue is when i try to send the json document to the server, then it gives me an error
-
+    
   }
   while (client.connected()) {
     String line = client.readStringUntil('\n');
@@ -85,6 +84,9 @@ void createTLSConnection() {
   Serial.println(line);
   Serial.println("==========");
   Serial.println("closing connection");
+  
+  //after sending the post request to the server 
+  deepSleep();
 }
 
 void getDeviceID() {
@@ -93,8 +95,8 @@ void getDeviceID() {
 }
 
 void deepSleep() {
-  Serial.println("Right before you sleep");
-  ESP.deepSleep(900e6);   //ESP goes into deep sleep for 15 minutes
+  Serial.println("ESP8266 going into deep sleep for 15 minutes");
+  ESP.deepSleep(900e6);
 }
 
 void connectToWifi() {
