@@ -3,45 +3,32 @@
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
-
-
-const char* host = "ecoders.ca";
+const char* host = "www.ecoders.ca";
 String url = "/dataProcess";
 const char* fingerprint = "33337bd569ceb38f5d79a02919910233f93aea53"; 
 const int httpsPort = 443;
-
 //Sensor Data Variables
 const int AirValue = 856; //Analog Value when not in water
 const int WaterValue = 458; //Analog Value when fully submerged
-int SoilMoistureAmount = 0;
+int SoilMoistureValue = 0;
 int SoilMoisturePercent = 0;
 StaticJsonDocument<200> doc;
 //String data;
 int httpCode;
 String requestBody;
 char jsonChar[100];
-
 String deviceID = "";
-
-
 void setup() {
   Serial.begin(115200);
-
   //connect to the wifi
   connectToWifi();
   getDeviceID();
-  
-  
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
-
-  
 }
-
 void loop() {
   createTLSConnection();
 }
-
 void createTLSConnection() {
   // Use WiFiClientSecure class to create TLS connection
   WiFiClientSecure client;
@@ -52,24 +39,27 @@ void createTLSConnection() {
     Serial.println("connection failed");
     return;
   }
-  
-  if (client.verify(fingerprint, host)) {
-    Serial.println("fingerprint matches");
-    readSensorData();
-    JSONDocument();
-  } else {
-    Serial.println("fingerprint doesn't match");
-  }
-
+  readSensorData();
+  JSONDocument();
   Serial.println("\nStarting connection to server...");
   if (!client.connect(host, 443))
     Serial.println("Connection failed!");
   else {
     Serial.println("Connected to server!");
-    //this is where the issue is when i try to send the json document to the server, then it gives me an error
+    //send the headers and the data here
     
   }
   while (client.connected()) {
+    int authorization_code = 123456;
+    client.print(String("POST ") + url + " HTTP/1.1\r\n" +
+               "Host: " + host + "\r\n" +
+               "Connection: close\r\n" + 
+               "Content-Type: application/json" + "\r\n" +
+               "Content-Length: " + requestBody.length() + "\r\n" +
+               "\r\n" + requestBody + "\r\n");
+
+
+    
     String line = client.readStringUntil('\n');
     Serial.println(line);
     Serial.println();
@@ -84,28 +74,23 @@ void createTLSConnection() {
   Serial.println(line);
   Serial.println("==========");
   Serial.println("closing connection");
-  
   //after sending the post request to the server 
   deepSleep();
 }
-
 void getDeviceID() {
   deviceID = WiFi.macAddress();
-  Serial.println(deviceID);  
+  Serial.println(deviceID);
 }
-
 void deepSleep() {
   Serial.println("ESP8266 going into deep sleep for 15 minutes");
   ESP.deepSleep(900e6);
 }
-
 void connectToWifi() {
   //WiFiManager
     //Local intialization. Once its business is done, there is no need to keep it around
     WiFiManager wifiManager;
     //reset saved settings
     //wifiManager.resetSettings();
-
     //fetches ssid and pass from eeprom and tries to connect
     //if it does not connect it starts an access point with the specified name
     //here  "AutoConnectAP"
@@ -113,39 +98,34 @@ void connectToWifi() {
     wifiManager.autoConnect("AutoConnectAP");
     //or use this for auto generated name ESP + ChipID
     //wifiManager.autoConnect();
-
     //if you get here you have connected to the WiFi
     Serial.println("connected...yeey :)");
 }
-
 void JSONDocument() {
   JsonObject root = doc.to<JsonObject>();
-
   //sending data to the JSON document
-  root["AirValue"] = AirValue;
+  root["UID"]="q0SPKvUv4WYTcunf9yzFTFiSqHu1";
+  root["DeviceId"]=0;
+  root["Battery"]=50;
+  root["AirValue"]= AirValue;
   root["WaterValue"] = WaterValue;
-  root["SoilMoistureValue"] = SoilMoistureAmount;
+  root["SoilMoistureValue"] = SoilMoistureValue;
   root["SoilMoisturePercent"] = SoilMoisturePercent;
-
+  root["Token"]=" ";
   serializeJsonPretty(doc, requestBody);
   serializeJsonPretty(doc, Serial);
-
   serializeJsonPretty(doc, jsonChar);
   //Serial.println("This is JSON DOcument");
   //Serial.println(jsonChar);
   //root.printTo((char*)jsonChar, root.size() + 1);
 }
-
 void readSensorData() {
   delay(10000); //wait 10 seconds
-  
   //Determine reading from sensor
-  SoilMoistureAmount = analogRead(A0);
-  SoilMoisturePercent = map(SoilMoistureAmount, AirValue, WaterValue, 0, 100); 
-
+  SoilMoistureValue = analogRead(A0);
+  SoilMoisturePercent = map(SoilMoistureValue, AirValue, WaterValue, 0, 100); 
   realisticPercentValue();
 }
-
 //make sure smPercent is 0-100 value
 void realisticPercentValue() {
   if (SoilMoisturePercent > 100) {
