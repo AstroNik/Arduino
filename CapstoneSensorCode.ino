@@ -12,14 +12,14 @@ int SoilMoistureValue = 0;
 int SoilMoisturePercent = 0;
 StaticJsonDocument<200> doc;
 String requestBody;
-String deviceID = "";
+int deviceID = 0;
 void setup() {
   Serial.begin(115200);
   //connect to the wifi
   connectToWifi();
   getDeviceID();
 }
-void loop() {
+void loop() {  
   createTLSConnection();
 }
 void createTLSConnection() {
@@ -58,8 +58,9 @@ void createTLSConnection() {
   deepSleep();
 }
 void getDeviceID() {
-  deviceID = WiFi.macAddress();
-  Serial.println("Device ID = " + deviceID);
+  deviceID = random(1,999999999);
+  Serial.print("Device ID: ");
+  Serial.println(deviceID);
 }
 void deepSleep() {
   Serial.println("ESP8266 going into deep sleep for 15 minutes");
@@ -75,6 +76,7 @@ void connectToWifi() {
     //if it does not connect it starts an access point with the specified name
     //here  "AutoConnectAP"
     //and goes into a blocking loop awaiting configuration
+  
     wifiManager.autoConnect("AutoConnectAP");
     //or use this for auto generated name ESP + ChipID
     //wifiManager.autoConnect();
@@ -85,7 +87,7 @@ void JSONDocument() {
   JsonObject root = doc.to<JsonObject>();
   //sending data to JSON document
   root["UID"]="q0SPKvUv4WYTcunf9yzFTFiSqHu1";
-  root["DeviceId"]=0;
+  root["DeviceId"]=deviceID;
   root["Battery"]=50;
   root["AirValue"]= AirValue;
   root["WaterValue"] = WaterValue;
