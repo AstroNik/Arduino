@@ -20,8 +20,8 @@ String serverResponse;
 int deviceID = 0;
 WiFiManager wifiManager;
 WiFiClientSecure client;
-const char *username;
-const char *password;
+char username[50];
+char password[50]; 
 
 // Required for LIGHT_SLEEP_T delay mode
 extern "C" {
@@ -106,8 +106,8 @@ void connectToWifi() {
     //and goes into a blocking loop awaiting configuration
 
     //initializing the login credential parameters
-    WiFiManagerParameter custom_username("username", "Enter Username: ", NULL, 50);
-    WiFiManagerParameter custom_password("password", "Enter Password: ", NULL, 50);
+    WiFiManagerParameter custom_username("username", "Enter Username: ", username, 50);
+    WiFiManagerParameter custom_password("password", "Enter Password: ", password, 50);
     
     //If it restarts and router is not yet online, it keeps rebooting and retrying to connect
     wifiManager.setTimeout(120);
@@ -117,14 +117,19 @@ void connectToWifi() {
     wifiManager.addParameter(&custom_password);
 
     //placing user inputed values into variables
-    username = custom_username.getValue();
-    password = custom_password.getValue();
+    //username = custom_username.getValue();
+    //password = custom_password.getValue();
+
+    Serial.println(username);
+    Serial.println(password);
     
     wifiManager.autoConnect("AutoConnectAP");
     //or use this for auto generated name ESP + ChipID
     //wifiManager.autoConnect();
     //if you get here you have connected to the WiFi
     Serial.println("Connected...yeey :)");
+    strcpy(username, custom_username.getValue());
+    strcpy(password, custom_password.getValue());
 }
 void sendUserCredentialsToBackend() {
   //Place credentials in JSON document
