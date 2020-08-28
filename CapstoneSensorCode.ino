@@ -5,6 +5,7 @@
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
 const char* host = "www.ecoders.ca";
 String url = "/dataProcess";
+String urlEmail = "/devicelogin";
 const int httpsPort = 443;
 //Sensor Data Variables
 const int AirValue = 856; //Analog Value when not in water
@@ -21,7 +22,6 @@ int deviceID = 0;
 WiFiManager wifiManager;
 WiFiClientSecure client;
 char username[50];
-char password[50]; 
 
 // Required for LIGHT_SLEEP_T delay mode
 extern "C" {
@@ -37,12 +37,12 @@ void setup() {
 }
 void loop() {  
   //proceed to send sensor data if user credentials match the backend credentials
-  if (serverResponse == "true") {
-    createTLSConnection();
-  }
-  else {
+  if (serverResponse == "HTTP/1.1 520 Origin Error") {
     Serial.println("The user credentials did not match the one in the backend");
     //TO DO: figure out how to redirect the user to be able to successfully input their credentials again 
+  }
+  else {
+    createTLSConnection();
   }
   //Loop every 3 minutes
   delay(60000*3-800); 
@@ -107,29 +107,20 @@ void connectToWifi() {
 
     //initializing the login credential parameters
     WiFiManagerParameter custom_username("username", "Enter Username: ", username, 50);
-    WiFiManagerParameter custom_password("password", "Enter Password: ", password, 50);
     
     //If it restarts and router is not yet online, it keeps rebooting and retrying to connect
     wifiManager.setTimeout(120);
 
     //Placing parameters on wifiManager page
     wifiManager.addParameter(&custom_username);
-    wifiManager.addParameter(&custom_password);
-
-    //placing user inputed values into variables
-    //username = custom_username.getValue();
-    //password = custom_password.getValue();
-
-    Serial.println(username);
-    Serial.println(password);
     
     wifiManager.autoConnect("AutoConnectAP");
     //or use this for auto generated name ESP + ChipID
     //wifiManager.autoConnect();
     //if you get here you have connected to the WiFi
     Serial.println("Connected...yeey :)");
+    
     strcpy(username, custom_username.getValue());
-    strcpy(password, custom_password.getValue());
 }
 void sendUserCredentialsToBackend() {
   //Place credentials in JSON document
@@ -142,7 +133,7 @@ void sendUserCredentialsToBackend() {
     Serial.println("Connection successful!");
 
     //Send a post request to the server
-    client.print(String("POST ") + url + " HTTP/1.1\r\n" +
+    client.print(String("POST ") + urlEmail + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n" + 
                "Content-Type: application/json" + "\r\n" +
@@ -160,7 +151,7 @@ void sendUserCredentialsToBackend() {
     {
       serverResponse = client.readStringUntil('\r');
       Serial.println("THIS IS THE START OF SERVER RESPONSE"); //for testing purposes
-      Serial.print(serverResponse);
+      Serial.println(serverResponse);
       Serial.println("THIS IS THE END OF SERVER RESPONSE"); //for testing purposes
     }
     client.stop();
@@ -174,7 +165,6 @@ void saveCredentialsInJsonDocument() {
   JsonObject root = userLoginDoc.to<JsonObject>();
   //sending data to JSON document
   root["Username"] = username;
-  root["Password"] = password;
   serializeJsonPretty(userLoginDoc, requestBodyLogin);
   serializeJsonPretty(userLoginDoc, Serial);
 }
