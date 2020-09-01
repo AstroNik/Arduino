@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
+
 const char* host = "www.ecoders.ca";
 String url = "/dataProcess";
 String urlEmail = "/devicelogin";
@@ -21,6 +22,7 @@ String serverResponse;
 int deviceID = 0;
 WiFiManager wifiManager;
 WiFiClientSecure client;
+WiFiClientSecure clientLogin;
 char username[50];
 
 // Required for LIGHT_SLEEP_T delay mode
@@ -126,45 +128,47 @@ void sendUserCredentialsToBackend() {
   //Place credentials in JSON document
   saveCredentialsInJsonDocument();
 
-  //Start a connection with the server
-  Serial.println("\nStarting connection to server to send user credentials...");
-  client.setInsecure();
-  if (client.connect(host, 443)) {
+  // Use WiFiClientSecure class to create TLS connection
+  clientLogin.setInsecure();
+  Serial.print("connecting to ");
+  Serial.println(host);
+  if (!clientLogin.connect(host, httpsPort)) {
+    Serial.println("Connection failed");
+    return;
+  }
+  Serial.println("\nStarting connection to server...");
+  if (!clientLogin.connect(host, 443))
+    Serial.println("Connection failed!");
+  else {
     Serial.println("Connection successful!");
 
-    //Send a post request to the server
-    client.print(String("POST ") + urlEmail + " HTTP/1.1\r\n" +
+    
+  }
+  while (clientLogin.connected()) {
+    clientLogin.print(String("POST ") + urlEmail + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n" + 
                "Content-Type: application/json" + "\r\n" +
                "Content-Length: " + requestBodyLogin.length() + "\r\n" +
                "\r\n" + requestBodyLogin + "\r\n");
-
-    //Wait up to 10 seconds for server to respond
-    int i = 0;
-    while ((!client.available()) && (i < 1000)) {
-      delay(10);
-      i++;
-    }
-    //Read ther server's response
-    if (client.available())
-    {
-      serverResponse = client.readStringUntil('\r');
+               
+    serverResponse = clientLogin.readStringUntil('\n');
+    
+    
+    if (serverResponse == "\r") {
       Serial.println("THIS IS THE START OF SERVER RESPONSE"); //for testing purposes
       Serial.println(serverResponse);
       Serial.println("THIS IS THE END OF SERVER RESPONSE"); //for testing purposes
+      Serial.println("Headers received");
+      break;
     }
-    client.stop();
-  }
-  else {
-    Serial.println("Connection failed!");
   }
 }
 //Saving the user login credentials in a JSON document
 void saveCredentialsInJsonDocument() {
-  JsonObject root = userLoginDoc.to<JsonObject>();
+  JsonObject rootOne = userLoginDoc.to<JsonObject>();
   //sending data to JSON document
-  root["Username"] = username;
+  rootOne["email"] = username;
   serializeJsonPretty(userLoginDoc, requestBodyLogin);
   serializeJsonPretty(userLoginDoc, Serial);
 }
