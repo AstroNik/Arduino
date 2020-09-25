@@ -40,7 +40,7 @@ void setup() {
 void loop() {  
   //proceed to send sensor data if user credentials match the backend credentials
   if (serverResponse == "HTTP/1.1 520 Origin Error") {
-    Serial.println("The user credentials did not match the one in the backend");
+    Serial.println("The user email does not exist in the database");
     //TO DO: figure out how to redirect the user to be able to successfully input their credentials again 
   }
   else {
@@ -54,15 +54,15 @@ void createTLSConnection() {
   client.setInsecure();
   Serial.print("connecting to ");
   Serial.println(host);
-  if (!client.connect(host, httpsPort)) {
-    Serial.println("Connection failed");
+  if (!client.connect(host, 443)) {
+    Serial.println("Connection failed the issue is dans here");
     return;
   }
   readSensorData();
   JSONDocument();
   Serial.println("\nStarting connection to server...");
   if (!client.connect(host, 443))
-    Serial.println("Connection failed!");
+    Serial.println("Connection failed! the issue is this");
   else {
     Serial.println("Connection successful!");
   }
@@ -152,17 +152,22 @@ void sendUserCredentialsToBackend() {
                "Content-Length: " + requestBodyLogin.length() + "\r\n" +
                "\r\n" + requestBodyLogin + "\r\n");
                
-    serverResponse = clientLogin.readStringUntil('\n');
-    
-    
-    if (serverResponse == "\r") {
-      Serial.println("THIS IS THE START OF SERVER RESPONSE"); //for testing purposes
-      Serial.println(serverResponse);
-      Serial.println("THIS IS THE END OF SERVER RESPONSE"); //for testing purposes
-      Serial.println("Headers received");
-      break;
+    Serial.println("request sent");
+    while (clientLogin.connected()) {
+      String line = clientLogin.readStringUntil('\n');
+      if (line == "\r") {
+        Serial.println("headers received");
+        break;
+      }
     }
+    serverResponse = clientLogin.readStringUntil('\n');
+    Serial.println("reply was:");
+    Serial.println("==========");
+    Serial.println(serverResponse);
+    Serial.println("==========");
+    Serial.println("closing connection");
   }
+  
 }
 //Saving the user login credentials in a JSON document
 void saveCredentialsInJsonDocument() {
@@ -176,7 +181,7 @@ void saveCredentialsInJsonDocument() {
 void JSONDocument() {
   JsonObject root = doc.to<JsonObject>();
   //sending data to JSON document
-  root["UID"] = "q0SPKvUv4WYTcunf9yzFTFiSqHu1";  //TO DO: retrieve the UID from the server
+  root["UID"] = serverResponse;
   root["DeviceId"] = deviceID;
   root["Battery"] = 50;
   root["AirValue"] = AirValue;
