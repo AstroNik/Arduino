@@ -22,7 +22,6 @@ String serverResponse;
 int deviceID = 0;
 WiFiManager wifiManager;
 WiFiClientSecure client;
-WiFiClientSecure clientLogin;
 char username[50];
 
 // Required for LIGHT_SLEEP_T delay mode
@@ -54,15 +53,15 @@ void createTLSConnection() {
   client.setInsecure();
   Serial.print("connecting to ");
   Serial.println(host);
-  if (!client.connect(host, 443)) {
-    Serial.println("Connection failed the issue is dans here");
+  if (!client.connect(host, httpsPort)) {
+    Serial.println("Connection failed");
     return;
   }
   readSensorData();
   JSONDocument();
   Serial.println("\nStarting connection to server...");
   if (!client.connect(host, 443))
-    Serial.println("Connection failed! the issue is this");
+    Serial.println("Connection failed!");
   else {
     Serial.println("Connection successful!");
   }
@@ -73,7 +72,6 @@ void createTLSConnection() {
                "Content-Type: application/json" + "\r\n" +
                "Content-Length: " + requestBody.length() + "\r\n" +
                "\r\n" + requestBody + "\r\n");
-
     String line = client.readStringUntil('\n');
     if (line == "\r") {
       Serial.println("Headers received");
@@ -107,21 +105,23 @@ void connectToWifi() {
     //here  "AutoConnectAP"
     //and goes into a blocking loop awaiting configuration
 
-    //initializing the login credential parameters
+    //initializing the email parameter
     WiFiManagerParameter custom_username("username", "Enter Username: ", username, 50);
     
     //If it restarts and router is not yet online, it keeps rebooting and retrying to connect
     wifiManager.setTimeout(120);
 
-    //Placing parameters on wifiManager page
+    //Placing parameter on wifiManager page
     wifiManager.addParameter(&custom_username);
-    
-    wifiManager.autoConnect("AutoConnectAP");
+
+    //Creating the access point for user to connect to
+    wifiManager.autoConnect("ECOders Sensor");
     //or use this for auto generated name ESP + ChipID
     //wifiManager.autoConnect();
     //if you get here you have connected to the WiFi
-    Serial.println("Connected...yeey :)");
-    
+    Serial.println("Successfully connected to the wifi");
+
+    //copy the username parameter values to the variable 'username'
     strcpy(username, custom_username.getValue());
 }
 void sendUserCredentialsToBackend() {
@@ -129,23 +129,23 @@ void sendUserCredentialsToBackend() {
   saveCredentialsInJsonDocument();
 
   // Use WiFiClientSecure class to create TLS connection
-  clientLogin.setInsecure();
+  client.setInsecure();
   Serial.print("connecting to ");
   Serial.println(host);
-  if (!clientLogin.connect(host, httpsPort)) {
+  if (!client.connect(host, httpsPort)) {
     Serial.println("Connection failed");
     return;
   }
   Serial.println("\nStarting connection to server...");
-  if (!clientLogin.connect(host, 443))
+  if (!client.connect(host, 443))
     Serial.println("Connection failed!");
   else {
     Serial.println("Connection successful!");
 
     
   }
-  while (clientLogin.connected()) {
-    clientLogin.print(String("POST ") + urlEmail + " HTTP/1.1\r\n" +
+  while (client.connected()) {
+    client.print(String("POST ") + urlEmail + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
                "Connection: close\r\n" + 
                "Content-Type: application/json" + "\r\n" +
@@ -153,14 +153,14 @@ void sendUserCredentialsToBackend() {
                "\r\n" + requestBodyLogin + "\r\n");
                
     Serial.println("request sent");
-    while (clientLogin.connected()) {
-      String line = clientLogin.readStringUntil('\n');
+    while (client.connected()) {
+      String line = client.readStringUntil('\n');
       if (line == "\r") {
         Serial.println("headers received");
         break;
       }
     }
-    serverResponse = clientLogin.readStringUntil('\n');
+    serverResponse = client.readStringUntil('\n');
     Serial.println("reply was:");
     Serial.println("==========");
     Serial.println(serverResponse);
