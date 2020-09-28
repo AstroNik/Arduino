@@ -20,6 +20,7 @@ StaticJsonDocument<200> userLoginDoc;
 String requestBodyLogin;
 String serverResponse;
 int deviceID = 0;
+int deviceIDMemory = 0;
 WiFiManager wifiManager;
 WiFiClientSecure client;
 char username[50];
@@ -31,10 +32,23 @@ extern "C" {
 
 void setup() {
   Serial.begin(115200);
-
+  EEPROM.begin(512);
+  
   connectToWifi();
+
+  //getting the device id from the EEPROM
+  for (int i = 0; i < 9; i++) {
+    int deviceIDMemory = EEPROM.read(i);
+    Serial.println(deviceIDMemory);
+  }
+  //Check if there is a device id is already stored in the memeory, if yes, use that if no then create a new one
+  if (deviceIDMemory != 000000000) {
+    return;
+  }
+  else {
+    getDeviceID();
+  }
   sendUserCredentialsToBackend();
-  getDeviceID();
 }
 void loop() {  
   //proceed to send sensor data if user credentials match the backend credentials
@@ -84,9 +98,42 @@ void createTLSConnection() {
 }
 void getDeviceID() {
   deviceID = random(1,999999999);
+
+  addDataToEEPROM();
   Serial.print("Device ID: ");
-  Serial.println(deviceID);
+  for (int i = 0; i < 9; i++) {
+    int val2 = EEPROM.read(i);
+    Serial.print(val2);
+  }
 }
+
+void addDataToEEPROM(){
+  //seperate each digit from the deviceID and save it in seperate variables
+  int n1,n2,n3,n4,n5,n6,n7,n8,n9;
+  n9 = deviceID % 10;
+  n8 = deviceID / 10 % 10;
+  n7 = deviceID / 100 % 10;
+  n6 = deviceID / 1000 % 10;
+  n5 = deviceID / 10000 % 10;
+  n4 = deviceID / 100000 % 10;
+  n3 = deviceID / 1000000 % 10;
+  n2 = deviceID / 10000000 % 10;
+  n1 = deviceID / 100000000 % 10;
+  
+  //now just write these numbers to the eeprom
+  EEPROM.write(0,n1);
+  EEPROM.write(1,n2);
+  EEPROM.write(2,n3);
+  EEPROM.write(3,n4);
+  EEPROM.write(4,n5);
+  EEPROM.write(5,n6);
+  EEPROM.write(6,n7);
+  EEPROM.write(7,n8);
+  EEPROM.write(8,n9);
+
+  EEPROM.commit();
+}
+
 void lightSleep() {
   Serial.println("ESP8266 going into light sleep for 15 minutes");
   WiFi.mode(WIFI_STA);
@@ -116,6 +163,7 @@ void connectToWifi() {
 
     //Creating the access point for user to connect to
     wifiManager.autoConnect("ECOders Sensor");
+    
     //or use this for auto generated name ESP + ChipID
     //wifiManager.autoConnect();
     //if you get here you have connected to the WiFi
