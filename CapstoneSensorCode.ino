@@ -1,29 +1,45 @@
+//MAKE SURE TO LOOK OVER THE DEVICE ID, AND MAKE SURE THE ONE YOU ARE SENDING IS AN INT AND NOT A STRING
+//make sure to add the into at the top, mentioning who the code is by and all that 
+
+
+
+
 #include <ESP8266WiFi.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
 
+//Server Variables
 const char* host = "www.ecoders.ca";
 String url = "/dataProcess";
 String urlEmail = "/devicelogin";
 const int httpsPort = 443;
+String serverResponse;
+
 //Sensor Data Variables
 const int AirValue = 856; //Analog Value when not in water
 const int WaterValue = 458; //Analog Value when fully submerged
 int SoilMoistureValue = 0;
 int SoilMoisturePercent = 0;
-//JSON document variables
+
+//JSON Document Variables
 StaticJsonDocument<200> doc;
 String requestBody;
 StaticJsonDocument<200> userLoginDoc;
 String requestBodyLogin;
-String serverResponse;
-int deviceID = 0;
-int deviceIDMemory = 0;
+
+//Wifi Manager Variables
 WiFiManager wifiManager;
 WiFiClientSecure client;
 char username[50];
+char deviceName[80];
+
+//Device ID and Memory Variables
+int deviceID;
+String MemoryVar;
+bool idInMemory = false;
+
 
 // Required for LIGHT_SLEEP_T delay mode
 extern "C" {
@@ -36,32 +52,41 @@ void setup() {
   
   connectToWifi();
 
-  //getting the device id from the EEPROM
-  for (int i = 0; i < 9; i++) {
-    int deviceIDMemory = EEPROM.read(i);
-    Serial.println(deviceIDMemory);
-  }
-  //Check if there is a device id is already stored in the memeory, if yes, use that if no then create a new one
-  if (deviceIDMemory != 000000000) {
-    return;
+  //check if device id is in memory 
+  if (checkDeviceIDInMemory() == true) {
+    Serial.println("The device id is in memory");
+    //read the device id from memory, and save it to deviceID variable
+    for (int i=0; i<9; i++){
+      MemoryVar += EEPROM.read(i); 
+    }
+    Serial.println(MemoryVar);
   }
   else {
+    Serial.println("New device id will be assigned to this device");
     getDeviceID();
+    Serial.println(MemoryVar);
   }
+  //Send the user email, plant name and device id to server
   sendUserCredentialsToBackend();
 }
+
 void loop() {  
-  //proceed to send sensor data if user credentials match the backend credentials
+  //determine what the server response is after retrieving the user email, plant name and device id
   if (serverResponse == "HTTP/1.1 520 Origin Error") {
     Serial.println("The user email does not exist in the database");
     //TO DO: figure out how to redirect the user to be able to successfully input their credentials again 
   }
   else {
+    //send the sensor data to the server if user email is valid
     createTLSConnection();
   }
+  
   //Loop every 3 minutes
   delay(60000*3-800); 
 }
+
+
+//Create a secure connection and send sensor data to the server
 void createTLSConnection() {
   // Use WiFiClientSecure class to create TLS connection
   client.setInsecure();
@@ -96,17 +121,33 @@ void createTLSConnection() {
   //After sending the post request to the server esp goes into light sleep
   lightSleep();
 }
-void getDeviceID() {
-  deviceID = random(1,999999999);
 
-  addDataToEEPROM();
-  Serial.print("Device ID: ");
+//Determines if device id is in the device's memory
+bool checkDeviceIDInMemory() {
   for (int i = 0; i < 9; i++) {
-    int val2 = EEPROM.read(i);
-    Serial.print(val2);
+    if (EEPROM.read(i) != 0) {
+      idInMemory = true;
+      break;
+    }
+    Serial.println("This byte is a 0");
   }
+  return idInMemory;
 }
 
+//Creates a random new device id 
+void getDeviceID() {
+  deviceID = random(1,999999999);
+  Serial.println("");
+  Serial.println("Device ID: ");
+  Serial.println(deviceID);
+  Serial.println("");
+
+  MemoryVar = (String)deviceID;
+  
+  addDataToEEPROM();
+}
+
+//Saves each int seperately into the memory as bytes
 void addDataToEEPROM(){
   //seperate each digit from the deviceID and save it in seperate variables
   int n1,n2,n3,n4,n5,n6,n7,n8,n9;
@@ -120,7 +161,7 @@ void addDataToEEPROM(){
   n2 = deviceID / 10000000 % 10;
   n1 = deviceID / 100000000 % 10;
   
-  //now just write these numbers to the eeprom
+  //Write these numbers to the eeprom
   EEPROM.write(0,n1);
   EEPROM.write(1,n2);
   EEPROM.write(2,n3);
@@ -137,9 +178,9 @@ void addDataToEEPROM(){
 void lightSleep() {
   Serial.println("ESP8266 going into light sleep for 15 minutes");
   WiFi.mode(WIFI_STA);
-  wifi_set_sleep_type(LIGHT_SLEEP_T);
-  delay(60000*15);
-  //ESP.deepSleep(900e6);
+  //wifi_set_sleep_type(LIGHT_SLEEP_T);
+  //delay(60000*15);
+  ESP.deepSleep(900e6);
 }
 void connectToWifi() {
   //WiFiManager
@@ -154,12 +195,14 @@ void connectToWifi() {
 
     //initializing the email parameter
     WiFiManagerParameter custom_username("username", "Enter Username: ", username, 50);
+    WiFiManagerParameter custom_deviceName("deviceName", "Enter Device Name: ", deviceName, 80);
     
     //If it restarts and router is not yet online, it keeps rebooting and retrying to connect
     wifiManager.setTimeout(120);
 
     //Placing parameter on wifiManager page
     wifiManager.addParameter(&custom_username);
+    wifiManager.addParameter(&custom_deviceName);
 
     //Creating the access point for user to connect to
     wifiManager.autoConnect("ECOders Sensor");
@@ -171,6 +214,7 @@ void connectToWifi() {
 
     //copy the username parameter values to the variable 'username'
     strcpy(username, custom_username.getValue());
+    strcpy(deviceName, custom_deviceName.getValue());
 }
 void sendUserCredentialsToBackend() {
   //Place credentials in JSON document
@@ -184,14 +228,14 @@ void sendUserCredentialsToBackend() {
     Serial.println("Connection failed");
     return;
   }
+  
   Serial.println("\nStarting connection to server...");
   if (!client.connect(host, 443))
     Serial.println("Connection failed!");
   else {
     Serial.println("Connection successful!");
-
-    
   }
+  
   while (client.connected()) {
     client.print(String("POST ") + urlEmail + " HTTP/1.1\r\n" +
                "Host: " + host + "\r\n" +
@@ -221,7 +265,9 @@ void sendUserCredentialsToBackend() {
 void saveCredentialsInJsonDocument() {
   JsonObject rootOne = userLoginDoc.to<JsonObject>();
   //sending data to JSON document
-  rootOne["email"] = username;
+  rootOne["Email"] = username;
+  rootOne["DeviceId"] = MemoryVar;
+  rootOne["DeviceName"] = deviceName;
   serializeJsonPretty(userLoginDoc, requestBodyLogin);
   serializeJsonPretty(userLoginDoc, Serial);
 }
@@ -230,7 +276,7 @@ void JSONDocument() {
   JsonObject root = doc.to<JsonObject>();
   //sending data to JSON document
   root["UID"] = serverResponse;
-  root["DeviceId"] = deviceID;
+  root["DeviceId"] = MemoryVar;
   root["Battery"] = 50;
   root["AirValue"] = AirValue;
   root["WaterValue"] = WaterValue;
