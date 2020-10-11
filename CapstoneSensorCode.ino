@@ -10,6 +10,8 @@
 #include <EEPROM.h>
 #include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
 
+ADC_MODE(ADC_VCC);
+
 //Server Variables
 const char* host = "www.ecoders.ca";
 String url = "/dataProcess";
@@ -39,6 +41,10 @@ char deviceName[80];
 int deviceID;
 String MemoryVar;
 bool idInMemory = false;
+
+//Battery Amount Variable
+int batteryAmount; 
+int voltage;
 
 
 // Required for LIGHT_SLEEP_T delay mode
@@ -96,6 +102,7 @@ void createTLSConnection() {
     Serial.println("Connection failed");
     return;
   }
+  batteryLevel();
   readSensorData();
   JSONDocument();
   Serial.println("\nStarting connection to server...");
@@ -182,6 +189,30 @@ void lightSleep() {
   //delay(60000*15);
   ESP.deepSleep(900e6);
 }
+
+//Retrieves the voltage of battery, and changes it to battery percentage amount 
+void batteryLevel() {
+  voltage = ESP.getVcc();
+
+  //determines the battery percentage amount with voltage amount
+  switch (voltage) {
+    case 0 ... 750:
+      batteryAmount = 20;
+      break;
+    case 751 ... 1500:
+      batteryAmount = 50;
+      break;
+    case 1501 ... 2250:
+      batteryAmount = 75;
+    case 2251 ... 3000:
+      batteryAmount = 100;
+      break;
+    default: 
+      batteryAmount = 0;
+      break;
+  }
+}
+
 void connectToWifi() {
   //WiFiManager
     //Local intialization. Once its business is done, there is no need to keep it around
@@ -277,12 +308,11 @@ void JSONDocument() {
   //sending data to JSON document
   root["UID"] = serverResponse;
   root["DeviceId"] = MemoryVar;
-  root["Battery"] = 50;
+  root["Battery"] = batteryAmount;
   root["AirValue"] = AirValue;
   root["WaterValue"] = WaterValue;
   root["SoilMoistureValue"] = SoilMoistureValue;
   root["SoilMoisturePercent"] = SoilMoisturePercent;
-  root["Token"]=" ";
   serializeJsonPretty(doc, requestBody);
   serializeJsonPretty(doc, Serial);
 }
