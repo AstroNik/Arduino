@@ -1,7 +1,7 @@
 /*
  * 
  * Code Written By: Vedika Maheshwari
- * Date: Monday October 19th, 2020
+ * Date: Sunday November 8th, 2020
  * Description: Code for the arduino device to send sensor data to the server
  * 
 */
@@ -11,10 +11,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <EEPROM.h>
-#include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
-
-//Reads the voltage of battery internally and not externally (since the battery is already connected to the board)
-//ADC_MODE(ADC_VCC);
+#include <WiFiManager.h>
 
 //Server Variables
 const char* host = "www.ecoders.ca";
@@ -29,24 +26,21 @@ const int WaterValue = 458; //Analog Value when fully submerged
 int SoilMoistureValue = 0;
 int SoilMoisturePercent = 0;
 
-//JSON Document Variables
-StaticJsonDocument<200> doc;
-String requestBody;
+//JSON Document Variables for user credential check
 StaticJsonDocument<200> userLoginDoc;
 String requestBodyLogin;
 
-//Wifi Manager Variables
+//Wifi Manager Variables 
 WiFiManager wifiManager;
 WiFiClientSecure client;
 char username[50];
 char deviceName[80];
 
-//Device ID and Memory Variables
+//Device ID Variable
 String deviceID = "987654321";
 
-//Battery Amount Variable
-int batteryAmount; 
-int voltage;
+//Battery Amount Variables
+int batteryAmount = 100;
 
 
 //needed to use C SDK based fuctions - needed for light sleep
@@ -56,8 +50,9 @@ extern "C" {
 
 void setup() {
   Serial.begin(115200);
-  EEPROM.begin(512);
-  
+  EEPROM.begin(1019);
+
+  //Connect to Wi-Fi 
   connectToWifi();
   
   //Send the user email, plant name and device id to server
@@ -65,31 +60,55 @@ void setup() {
 }
 
 void loop() {  
-  //determine what the server response is after retrieving the user email, plant name and device id
-  
-
   //check the server response to determine if the user email exists in the database
-  if (serverResponse == "HTTP/1.1 520 Origin Error") {
+  if (serverResponse == "UserNotFound") {
     Serial.println("The user email does not exist in the database");
   }
   else {
     //send the sensor data to the server if user email is valid
     createTLSConnection();
-  }
-  
-  //Loop every 3 minutes
-  delay(60000*3-800); 
-  
+  }  
 }
 
 //Create a secure connection and send sensor data to the server
 void createTLSConnection() {
-  // Use WiFiClientSecure class to create TLS connection
-  client.setInsecure();
-  batteryLevel();
-  readSensorData();
-  JSONDocument();
+  //JSON Document Variables for sensor data 
+  StaticJsonDocument<200> doc;
+  String requestBody;
   
+  //Determine data readings from sensor
+  SoilMoistureValue = analogRead(A0);
+  SoilMoisturePercent = map(SoilMoistureValue, AirValue, WaterValue, 0, 100); 
+
+  //The value of SoilMoisturePercent can equal to negative values and values over 100
+  //Check was created to make sure SoilMoisturePercent is in the 0-100 percent range
+  if (SoilMoisturePercent > 100) {
+    SoilMoisturePercent = 100;
+  } 
+  else if (SoilMoisturePercent < 0) {
+    SoilMoisturePercent = 0;
+  }
+  
+  // Use WiFiClientSecure class to create TLS connection
+  //FIGURE OUT WHAT THIS DOES
+  client.setInsecure();
+
+  //Place serverResponse, deviceID, batteryAmount and sensor data in a JSON document
+  JsonObject root = doc.to<JsonObject>();
+  //Placing data in JSON document
+  root["UID"] = serverResponse;
+  root["DeviceId"] = deviceID;
+  root["Battery"] = batteryAmount;
+  root["AirValue"] = AirValue;
+  root["WaterValue"] = WaterValue;
+  root["SoilMoistureValue"] = SoilMoistureValue;
+  root["SoilMoisturePercent"] = SoilMoisturePercent;
+
+  //Save the JSON document data as a string
+  serializeJsonPretty(doc, requestBody);
+  serializeJsonPretty(doc, Serial);
+
+  //Connect to the host
   Serial.print("connecting to ");
   Serial.println(host);
   if (!client.connect(host, httpsPort)) {
@@ -99,6 +118,7 @@ void createTLSConnection() {
   else {
     Serial.println("Connection successful!");
     while (client.connected()) {
+      //Sending POST request to server with JSON document
       client.print(String("POST ") + url + " HTTP/1.1\r\n" +
                  "Host: " + host + "\r\n" +
                  "Connection: close\r\n" + 
@@ -113,8 +133,8 @@ void createTLSConnection() {
     }
   }
   
-  //After sending the post request to the server esp goes into light sleep
-  //lightSleep();
+  //After sending the post request, device goes into light sleep for 15 minutes
+  lightSleep();
 }
 
 //
@@ -123,54 +143,29 @@ void lightSleep() {
   WiFi.mode(WIFI_STA);
   wifi_set_sleep_type(LIGHT_SLEEP_T);
   delay(60000*15);
-  //ESP.deepSleep(900e6);
 }
 
-//Retrieves the voltage of battery, and changes it to battery percentage amount 
-void batteryLevel() {
-  voltage = ESP.getVcc();
-
-  //determines the battery percentage amount with voltage amount
-  switch (voltage) {
-    case 0 ... 750:
-      batteryAmount = 20;
-      break;
-    case 751 ... 1500:
-      batteryAmount = 50;
-      break;
-    case 1501 ... 2250:
-      batteryAmount = 75;
-      break;
-    default: 
-      batteryAmount = 100;
-      break;
-  }
-}
-
+//Connect to wifi and 
 void connectToWifi() {
     //reset saved settings
     wifiManager.resetSettings();
     //fetches ssid and pass from eeprom and tries to connect
-    //if it does not connect it starts an access point with the specified name
-    //here  "AutoConnectAP"
-    //and goes into a blocking loop awaiting configuration
+    //if it does not connect it starts an access point with the specified name "ECOders Sensor"
 
-    //initializing the email parameter
+    //initializing the email and deviceName parameter
     WiFiManagerParameter custom_username("username", "Enter Email: ", username, 50);
     WiFiManagerParameter custom_deviceName("deviceName", "Enter Device Name: ", deviceName, 80);
     
     //If it restarts and router is not yet online, it keeps rebooting and retrying to connect
-    wifiManager.setTimeout(120);
+    wifiManager.setTimeout(180);
 
-    //Placing parameter on wifiManager page
+    //Placing parameters on wifiManager's page
     wifiManager.addParameter(&custom_username);
     wifiManager.addParameter(&custom_deviceName);
 
     //Creating the access point for user to connect to
     wifiManager.autoConnect("ECOders Sensor");
     
-    //or use this for auto generated name ESP + ChipID
-    //wifiManager.autoConnect();
     //if you get here you have connected to the WiFi
     Serial.println("Successfully connected to the wifi");
 
@@ -183,7 +178,7 @@ void sendUserCredentialsToBackend() {
   //Place credentials in JSON document
   saveCredentialsInJsonDocument();
 
-  // Use WiFiClientSecure class to create TLS connection
+  //Use WiFiClientSecure class to create secure connection - figure out what this line does
   client.setInsecure();
   Serial.print("connecting to ");
   Serial.println(host);
@@ -195,6 +190,7 @@ void sendUserCredentialsToBackend() {
     Serial.println("Connection successful!");
   
     while (client.connected()) {
+      //Sending POST request to server with JSON document
       client.print(String("POST ") + urlEmail + " HTTP/1.1\r\n" +
                  "Host: " + host + "\r\n" +
                  "Connection: close\r\n" + 
@@ -203,7 +199,9 @@ void sendUserCredentialsToBackend() {
                  "\r\n" + requestBodyLogin + "\r\n");
                  
       Serial.println("request sent");
-  
+
+      //Retrieve and save server response in variable, serverResponse
+      //Another while loop is needed, otherwise the serverResponse consists of all specific details, whereas we only need the UID as the serverResponse
       while (client.connected()) {
         String line = client.readStringUntil('\n');
         if (line == "\r") {
@@ -211,18 +209,23 @@ void sendUserCredentialsToBackend() {
           break;
         }
       }
-  
-      //additional quotation marks, so i have to remove them
+
+      //Server sends the serverResponse with a pair of quotation marks to indicate a string
+      //The arduino also adds an additional pair of quotation marks to indicate a string
+      //Therefore, the additional pair of quotation marks have to be removed so that the server can handle request being sent otherwise data is not sent successfully
+      char quotationMarks = '"';
+      char serverResponseCharacter;
+
       serverResponse = client.readStringUntil('\n');
-      char no = '"';
-      char c;
-      for (int i=0; i<serverResponse.length();++i){
-          c = serverResponse.charAt(i);
-          if(c==no){
+      //Checks each char in the server response to find and remove all quotation marks from the serverResponse
+      for (int i = 0; i < serverResponse.length(); ++i){
+          serverResponseCharacter = serverResponse.charAt(i);
+          if(serverResponseCharacter == quotationMarks){
               serverResponse.remove(i, 1);
           }
       }
       
+      //printing out server response onto the serial
       Serial.println("reply was:");
       Serial.println("==========");
       Serial.println(serverResponse);
@@ -230,46 +233,17 @@ void sendUserCredentialsToBackend() {
       Serial.println("closing connection");
     }
   }
-  
 }
-//Saving the user login credentials in a JSON document
+
+//Saving user email, deviceID and user created device name in a JSON document
 void saveCredentialsInJsonDocument() {
   JsonObject rootOne = userLoginDoc.to<JsonObject>();
   //sending data to JSON document
   rootOne["Email"] = username;
   rootOne["DeviceId"] = deviceID;
   rootOne["DeviceName"] = deviceName;
+
+  //Save the JSON document authentication data as a string
   serializeJsonPretty(userLoginDoc, requestBodyLogin);
   serializeJsonPretty(userLoginDoc, Serial);
-}
-//Place sensor data and other required parameters in a JSON document
-void JSONDocument() {
-  JsonObject root = doc.to<JsonObject>();
-  //sending data to JSON document
-  root["UID"] = serverResponse;
-  root["DeviceId"] = deviceID;
-  root["Battery"] = batteryAmount;
-  root["AirValue"] = AirValue;
-  root["WaterValue"] = WaterValue;
-  root["SoilMoistureValue"] = SoilMoistureValue;
-  root["SoilMoisturePercent"] = SoilMoisturePercent;
-  serializeJsonPretty(doc, requestBody);
-  serializeJsonPretty(doc, Serial);
-}
-//Retrieve sensor data
-void readSensorData() {
-  delay(10000); //wait 10 seconds
-  //Determine reading from sensor
-  SoilMoistureValue = analogRead(A0);
-  SoilMoisturePercent = map(SoilMoistureValue, AirValue, WaterValue, 0, 100); 
-  realisticPercentValue();
-}
-//Make sure SoilMoisturePercent is 0-100 value
-void realisticPercentValue() {
-  if (SoilMoisturePercent > 100) {
-    SoilMoisturePercent = 100;
-  } 
-  else if (SoilMoisturePercent < 0) {
-    SoilMoisturePercent = 0;
-  }
 }
