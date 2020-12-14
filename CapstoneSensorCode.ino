@@ -13,6 +13,9 @@
 #include <EEPROM.h>
 #include <WiFiManager.h>
 
+//Reads the voltage of battery internally and not externally (since the battery is already connected to the board)
+//ADC_MODE(ADC_VCC);
+
 //Server Variables
 const char* host = "www.ecoders.ca";
 String url = "/dataProcess";
@@ -38,10 +41,12 @@ char deviceName[80];
 
 //Device ID Variable
 String deviceID = "987654321";
+String MemoryVar;
+bool idInMemory = false;
 
 //Battery Amount Variables
 int batteryAmount = 100;
-
+int voltage;
 
 //needed to use C SDK based fuctions - needed for light sleep
 extern "C" {
@@ -54,6 +59,22 @@ void setup() {
 
   //Connect to Wi-Fi 
   connectToWifi();
+
+  /*
+  //check if device id is in memory 
+  if (checkDeviceIDInMemory() == true) {
+    Serial.println("The device id is in memory");
+    //read the device id from memory, and save it to deviceID variable
+    for (int i=0; i<9; i++){
+      MemoryVar += EEPROM.read(i); 
+    }
+    Serial.println(MemoryVar);
+  }
+  else {
+    Serial.println("New device id will be assigned to this device");
+    getDeviceID();
+    Serial.println(MemoryVar);
+  }*/
   
   //Send the user email, plant name and device id to server
   sendUserCredentialsToBackend();
@@ -75,7 +96,31 @@ void createTLSConnection() {
   //JSON Document Variables for sensor data 
   StaticJsonDocument<200> doc;
   String requestBody;
+
+  /* 
+  //Retrieves the voltage of battery, and changes it to battery percentage amount 
+  void batteryLevel() {
+    voltage = ESP.getVcc();
   
+    //determines the battery percentage amount with voltage amount
+    switch (voltage) {
+      case 0 ... 750:
+        batteryAmount = 20;
+        break;
+      case 751 ... 1500:
+        batteryAmount = 50;
+        break;
+      case 1501 ... 2250:
+        batteryAmount = 75;
+      case 2251 ... 5000:
+        batteryAmount = 100;
+        break;
+      default: 
+        batteryAmount = 0;
+        break;
+    }
+  }*/
+
   //Determine data readings from sensor
   SoilMoistureValue = analogRead(A0);
   SoilMoisturePercent = map(SoilMoistureValue, AirValue, WaterValue, 0, 100); 
@@ -90,14 +135,13 @@ void createTLSConnection() {
   }
   
   // Use WiFiClientSecure class to create TLS connection
-  //FIGURE OUT WHAT THIS DOES
   client.setInsecure();
 
   //Place serverResponse, deviceID, batteryAmount and sensor data in a JSON document
   JsonObject root = doc.to<JsonObject>();
   //Placing data in JSON document
   root["UID"] = serverResponse;
-  root["DeviceId"] = deviceID;
+  root["DeviceId"] = voltage;
   root["Battery"] = batteryAmount;
   root["AirValue"] = AirValue;
   root["WaterValue"] = WaterValue;
@@ -137,6 +181,66 @@ void createTLSConnection() {
   lightSleep();
 }
 
+//Determine if device id is in the device's memory
+bool checkDeviceIDInMemory() {
+  for (int i = 0; i < 9; i++) {
+    Serial.println(EEPROM.read(i));
+    if (EEPROM.read(i) != 0) {
+      idInMemory = true;
+      break;
+    }
+    Serial.println("This byte is a 0");
+  }
+  return idInMemory;
+}
+
+//Creates a random new device id 
+void getDeviceID() {
+  deviceID = random(1,999999999);
+  Serial.println("");
+  Serial.println("Device ID: ");
+  Serial.println(deviceID);
+  Serial.println("");
+
+  MemoryVar = (String)deviceID;
+  
+  addDataToEEPROM();
+}
+
+//Saves each int seperately into the memory as bytes
+void addDataToEEPROM(){
+  //initializing variables to hold each digit seperately 
+  int n1,n2,n3,n4,n5,n6,n7,n8,n9;
+
+  //seperate each digit from the deviceID and save it in seperate variables
+  //start from the right most digit
+  n9 = deviceID % 10;
+  n8 = deviceID / 10 % 10;
+  n7 = deviceID / 100 % 10;
+  n6 = deviceID / 1000 % 10;
+  n5 = deviceID / 10000 % 10;
+  n4 = deviceID / 100000 % 10;
+  n3 = deviceID / 1000000 % 10;
+  n2 = deviceID / 10000000 % 10;
+  n1 = deviceID / 100000000 % 10;
+  
+  //Write each digit to EEPROM
+  EEPROM.write(0,n1);
+  EEPROM.write(1,n2);
+  EEPROM.write(2,n3);
+  EEPROM.write(3,n4);
+  EEPROM.write(4,n5);
+  EEPROM.write(5,n6);
+  EEPROM.write(6,n7);
+  EEPROM.write(7,n8);
+  EEPROM.write(8,n9);
+
+  //commit to EEPROM
+  bool var = EEPROM.commit();
+  Serial.println("Commit value: ");
+  Serial.println(var);
+}
+
 //
 void lightSleep() {
   Serial.println("ESP8266 going into light sleep for 15 minutes");
@@ -145,7 +249,7 @@ void lightSleep() {
   delay(60000*15);
 }
 
-//Connect to wifi and 
+//Connect to wifi and retrieve user email 
 void connectToWifi() {
     //reset saved settings
     wifiManager.resetSettings();
