@@ -17,7 +17,7 @@
 //ADC_MODE(ADC_VCC);
 
 //Server Variables
-const char* host = "www.ecoders.ca";
+const char* host = "ecoders.nikhilkapadia.com";
 String url = "/dataProcess";
 String urlEmail = "/devicelogin";
 const int httpsPort = 443;
