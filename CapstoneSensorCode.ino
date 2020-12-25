@@ -1,7 +1,7 @@
 /*
  * 
  * Code Written By: Vedika Maheshwari
- * Date: Sunday November 8th, 2020
+ * Date: Friday December 25th, 2020
  * Description: Code for the arduino device to send sensor data to the server
  * 
 */
@@ -17,7 +17,7 @@
 //ADC_MODE(ADC_VCC);
 
 //Server Variables
-const char* host = "www.ecoders.ca";
+const char* host = "ecoders.nikhilkapadia.com";
 String url = "/dataProcess";
 String urlEmail = "/devicelogin";
 const int httpsPort = 443;
@@ -141,7 +141,7 @@ void createTLSConnection() {
   JsonObject root = doc.to<JsonObject>();
   //Placing data in JSON document
   root["UID"] = serverResponse;
-  root["DeviceId"] = voltage;
+  root["DeviceId"] = deviceID;
   root["Battery"] = batteryAmount;
   root["AirValue"] = AirValue;
   root["WaterValue"] = WaterValue;
@@ -204,9 +204,9 @@ void getDeviceID() {
 
   MemoryVar = (String)deviceID;
   
-  addDataToEEPROM();
+  //addDataToEEPROM();
 }
-
+/*
 //Saves each int seperately into the memory as bytes
 void addDataToEEPROM(){
   //initializing variables to hold each digit seperately 
@@ -239,7 +239,7 @@ void addDataToEEPROM(){
   bool var = EEPROM.commit();
   Serial.println("Commit value: ");
   Serial.println(var);
-}
+}*/
 
 //
 void lightSleep() {
